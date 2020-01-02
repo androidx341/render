@@ -1,0 +1,15 @@
+{
+    "name": "andrii/render",
+    "authors": [
+        {
+            "name": "Andrii.Chernysh",
+            "email": "chernysh904@gmail.com"
+        }
+    ],
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "": "src/"
+        }
+    }
+}

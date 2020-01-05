@@ -6,7 +6,9 @@
             "email": "chernysh904@gmail.com"
         }
     ],
-    "require": {},
+    "require": {
+      "ext-gd": "*"
+    },
     "autoload": {
         "psr-4": {
             "": "src/"

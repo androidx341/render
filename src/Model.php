@@ -1,16 +1,20 @@
 <?php
 
+use Geometry\Vec3f;
 
 class Model
 {
     private $verts = [];
     private $faces = [];
+    private $path = '';
 
     public function __construct($path)
     {
         if (!file_exists($path)) {
             echo "File not found";
         }
+
+        $this->path = $path;
 
         $file = fopen($path, 'r');
         if ($file) {
@@ -34,7 +38,7 @@ class Model
         }
         switch ($res[0]) {
             case 'v':
-                $this->verts[] = new Vec3($res[1], $res[2], $res[3]);
+                $this->verts[] = new Vec3f($res[1], $res[2], $res[3]);
                 break;
             case 'f':
                 $size = count($res) - 1;
@@ -59,7 +63,7 @@ class Model
 
     /**
      * @param int $i
-     * @return Vec3|null
+     * @return Vec3f|null
      */
     public function vert(int $i) {
         return $this->verts[$i - 1] ?? null;
@@ -73,5 +77,10 @@ class Model
     public function nverts()
     {
         return count($this->verts);
+    }
+
+    public function getPath()
+    {
+        return $this->path;
     }
 }

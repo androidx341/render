@@ -6,11 +6,12 @@ use Geometry\Vec3f;
 $start = microtime(true);
 
 $render = new Render();
-$render->createView(500, 500);
-$render->setBackGroundColor(0, 50, 50);
+$render->createView(800, 800);
+$render->setBackGroundColor(0, 0, 0);
 $render->setLightDir(new Vec3f(0, 0, -1));
 
 $model = new Model('data/head.obj');
 $render->renderModel($model);
+//$render->renderTest();
 
 echo microtime(true) - $start;

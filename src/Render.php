@@ -9,7 +9,9 @@ class Render
     private $image = null;
     private int $width = 0;
     private int $height = 0;
+    private int $depth = 255;
     private Vec3f $lightDir;
+    private $zBuffer = [];
 
     public function __construct()
     {
@@ -22,6 +24,16 @@ class Render
         $this->height = $height;
         $this->image = ImageCreateTrueColor($width, $height);
         ImageColorAllocate($this->image, 0, 0, 0);
+        $this->zBuffer = new SplFixedArray($width * $height);
+        $this->zFlush();
+    }
+
+    public function zFlush()
+    {
+        $size = $this->width * $this->height;
+        for ($i = 0; $i < $size; $i++) {
+            $this->zBuffer[$i] = PHP_FLOAT_MIN;
+        }
     }
 
     /**
@@ -58,7 +70,11 @@ class Render
 
             for ($j = 0; $j < 3; $j++) {
                 $v = $model->vert($face[$j]);
-                $screenCoords[$j] = new Vec2i(($v->x + 1) * $this->width / 2, ($v->y + 1) * $this->height / 2);
+                $screenCoords[$j] = new Vec3i(
+                    ($v->x + 1) * $this->width / 2,
+                    ($v->y + 1) * $this->height / 2,
+                    ($v->z + 1) * $this->depth / 2
+                );
                 $worldCoords[$j] = $v;
             }
 
@@ -67,7 +83,7 @@ class Render
             $intensity = $normal->scalar($this->lightDir);
             if ($intensity > 0) {
                 $color = ImageColorAllocate($this->image, $intensity * 255, $intensity * 255, $intensity * 255);
-                Render::triangle($screenCoords[0], $screenCoords[1], $screenCoords[2], $this->image, $color);
+                Render::triangle($screenCoords[0], $screenCoords[1], $screenCoords[2], $this->image, $color, $this->zBuffer);
             }
         }
 
@@ -75,7 +91,7 @@ class Render
         ImagePng($this->image, 'out.png');
     }
 
-    public static function line2d(Vec3i $v1, Vec3i $v2, $img, $color)
+    public static function line2d(Vec2i $v1, Vec2i $v2, $img, $color)
     {
         $v1 = clone $v1;
         $v2 = clone $v2;
@@ -113,7 +129,7 @@ class Render
         }
     }
 
-    public static function triangle(Vec2i $v1, Vec2i $v2, Vec2i $v3, $img, $color)
+    public static function triangle(Vec3i $v1, Vec3i $v2, Vec3i $v3, $img, $color, &$zBuffer)
     {
         if ($v1->y == $v2->y && $v2->y == $v3->y) return;
 
@@ -141,6 +157,60 @@ class Render
             for ($j = $A->x; $j <= $B->x; $j++) {
                 $tmp = $v1->y + $i;
                 imagesetpixel($img, $j, $tmp , $color);
+            }
+        }
+    }
+
+    /**
+     * @param $hexcolor
+     * @return false|int
+     */
+    public function colorHex($hexcolor)
+    {
+        list($r, $g, $b) = sscanf($hexcolor, "#%02x%02x%02x");
+        return ImageColorAllocate($this->image, $r, $g, $b);
+    }
+
+    /**
+     * @param $r
+     * @param $g
+     * @param $b
+     * @return false|int
+     */
+    public function colorRGB($r, $g, $b)
+    {
+        return ImageColorAllocate($this->image, $r, $g, $b);
+    }
+
+    public function renderTest()
+    {
+        $render = ImageCreateTrueColor($this->width, 16);
+        $yBuffer = [];
+
+        for ($i = 0; $i < $this->width; $i++) {
+            $yBuffer[$i] = PHP_FLOAT_MIN;
+        }
+
+        self::rasterize(new Vec2i(20, 34),   new Vec2i(744, 400), $render, $this->colorHex('#ff0000'), $yBuffer);
+        self::rasterize(new Vec2i(120, 434), new Vec2i(444, 400), $render, $this->colorHex('#00ff00'), $yBuffer);
+        self::rasterize(new Vec2i(330, 463), new Vec2i(594, 200), $render, $this->colorHex('#0000ff'), $yBuffer);
+
+        imageflip($render, IMG_FLIP_VERTICAL);
+        ImagePng($render, 'out2.png');
+    }
+
+    public static function rasterize(Vec2i $v0, Vec2i $v1, &$image, $color, &$yBuffer = [])
+    {
+        if ($v0->x > $v1->x) Helper::swap($v0, $v1);
+
+        for ($x = $v0->x; $x <= $v1->x; $x++) {
+            $t = ($x - $v0->x) / ($v1->x - $v0->x);
+            $y = (int) ($v0->y * (1 - $t) + $v1->y * $t + .5);
+            if ($yBuffer[$x] < $y) {
+                $yBuffer[$x] = $y;
+                for ($w = 0; $w < 16; $w++) {
+                    imagesetpixel($image, $x, $w , $color);
+                }
             }
         }
     }

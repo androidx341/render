@@ -19,6 +19,15 @@ class Vec3
      * @param Vec3 $v
      * @return static
      */
+    public static function fromVec(Vec3 $v)
+    {
+        return new static($v->x, $v->y, $v->z);
+    }
+
+    /**
+     * @param Vec3 $v
+     * @return static
+     */
     public function add(Vec3 $v)
     {
         return new static(

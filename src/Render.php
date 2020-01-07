@@ -3,6 +3,8 @@
 use Geometry\Vec3i;
 use Geometry\Vec2i;
 use Geometry\Vec3f;
+use Geometry\Vec3;
+use Library\ZBuffer;
 
 class Render
 {
@@ -11,7 +13,7 @@ class Render
     private int $height = 0;
     private int $depth = 255;
     private Vec3f $lightDir;
-    private $zBuffer = [];
+    private ZBuffer $zBuffer;
 
     public function __construct()
     {
@@ -24,16 +26,7 @@ class Render
         $this->height = $height;
         $this->image = ImageCreateTrueColor($width, $height);
         ImageColorAllocate($this->image, 0, 0, 0);
-        $this->zBuffer = new SplFixedArray($width * $height);
-        $this->zFlush();
-    }
-
-    public function zFlush()
-    {
-        $size = $this->width * $this->height;
-        for ($i = 0; $i < $size; $i++) {
-            $this->zBuffer[$i] = PHP_FLOAT_MIN;
-        }
+        $this->zBuffer = new ZBuffer($width, $height);
     }
 
     /**
@@ -82,7 +75,7 @@ class Render
             $normal->normalize();
             $intensity = $normal->scalar($this->lightDir);
             if ($intensity > 0) {
-                $color = ImageColorAllocate($this->image, $intensity * 255, $intensity * 255, $intensity * 255);
+                $color = $this->colorRGB($intensity * 255, $intensity * 255, $intensity * 255);
                 Render::triangle($screenCoords[0], $screenCoords[1], $screenCoords[2], $this->image, $color, $this->zBuffer);
             }
         }
@@ -129,7 +122,7 @@ class Render
         }
     }
 
-    public static function triangle(Vec3i $v1, Vec3i $v2, Vec3i $v3, $img, $color, &$zBuffer)
+    public static function triangle(Vec3i $v1, Vec3i $v2, Vec3i $v3, $img, $color, ZBuffer $zBuffer)
     {
         if ($v1->y == $v2->y && $v2->y == $v3->y) return;
 
@@ -142,7 +135,7 @@ class Render
         if ($v2->y > $v3->y) Helper::swap($v2, $v3);
 
         $totalHeight = $v3->y - $v1->y;
-
+        $P = new Vec3i();
         for ($i = 0; $i < $totalHeight; $i++) {
             $secondHalf = $i > $v2->y - $v1->y || $v1->y == $v2->y;
             $segmentHeight = $secondHalf ? $v3->y - $v2->y : $v2->y - $v1->y;
@@ -155,10 +148,33 @@ class Render
             if ($A->x > $B->x) Helper::swap($A, $B);
 
             for ($j = $A->x; $j <= $B->x; $j++) {
-                $tmp = $v1->y + $i;
-                imagesetpixel($img, $j, $tmp , $color);
+                $phi = $B->x == $A->x ? 1 : ($j - $A->x) / ($B->x - $A->x);
+                $P = self::calcP($P, $A, $B, $phi);
+                $P->x = $j; $P->y = $v1->y + $i;
+                $zIdx = $P->x + $P->y * $zBuffer->getWidth();
+                if ($zBuffer->get($zIdx) < $P->z) {
+                    $zBuffer->set($zIdx, $P->z);
+                    imagesetpixel($img, $P->x, $P->y, $color);
+                }
             }
         }
+    }
+
+    /**
+     * Optimized Calculation
+     * @param Vec3 $P
+     * @param Vec3 $A
+     * @param Vec3 $B
+     * @param $phi
+     * @return Vec3
+     */
+    private static function calcP(Vec3 $P, Vec3 $A, Vec3 $B, $phi)
+    {
+        $P->x = $A->x + ($B->x - $A->x) * $phi;
+        $P->y = $A->y + ($B->y - $A->y) * $phi;
+        $P->z = $A->z + ($B->z - $A->z) * $phi;
+
+        return $P;
     }
 
     /**
@@ -182,22 +198,6 @@ class Render
         return ImageColorAllocate($this->image, $r, $g, $b);
     }
 
-    public function renderTest()
-    {
-        $render = ImageCreateTrueColor($this->width, 16);
-        $yBuffer = [];
-
-        for ($i = 0; $i < $this->width; $i++) {
-            $yBuffer[$i] = PHP_FLOAT_MIN;
-        }
-
-        self::rasterize(new Vec2i(20, 34),   new Vec2i(744, 400), $render, $this->colorHex('#ff0000'), $yBuffer);
-        self::rasterize(new Vec2i(120, 434), new Vec2i(444, 400), $render, $this->colorHex('#00ff00'), $yBuffer);
-        self::rasterize(new Vec2i(330, 463), new Vec2i(594, 200), $render, $this->colorHex('#0000ff'), $yBuffer);
-
-        imageflip($render, IMG_FLIP_VERTICAL);
-        ImagePng($render, 'out2.png');
-    }
 
     public static function rasterize(Vec2i $v0, Vec2i $v1, &$image, $color, &$yBuffer = [])
     {
